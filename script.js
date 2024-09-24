@@ -101,10 +101,18 @@ function addDragAndDropHandlers(item) {
         const draggableElement = document.getElementById(id);
         const dropzone = e.target;
 
-        if (dropzone === listContainer.lastElementChild) {
-            listContainer.appendChild(draggableElement); // Розміщуємо в кінці
+        // Отримуємо координати миші
+        const mouseY = e.clientY;
+
+        // Отримуємо координати верхньої та нижньої частини поточного елемента
+        const boundingRect = dropzone.getBoundingClientRect();
+        const offsetY = boundingRect.top + (boundingRect.height / 2); // Середина елемента
+
+        // Якщо миша знаходиться вище середини елемента - вставляємо перед ним, якщо нижче - після
+        if (mouseY < offsetY) {
+            listContainer.insertBefore(draggableElement, dropzone); // Перед елементом
         } else {
-            listContainer.insertBefore(draggableElement, dropzone); // Вставляємо перед цільовим елементом
+            listContainer.insertBefore(draggableElement, dropzone.nextSibling); // Після елемента
         }
 
         saveData();
