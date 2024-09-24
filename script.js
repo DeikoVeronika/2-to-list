@@ -1,6 +1,15 @@
 const inputBox = document.getElementById("input-box");
 const listContainer = document.getElementById("list-container");
 
+// Підключення до WebSocket-сервера
+const socket = new WebSocket('ws://localhost:8080');
+
+// Відправка нового завдання на сервер
+function sendTask(task) {
+    socket.send(JSON.stringify(task));
+}
+
+// Додати завдання
 function addTask() {
     if (inputBox.value.trim() === '') {
         alert("You must write something!");
@@ -19,10 +28,47 @@ function addTask() {
         li.appendChild(span);
 
         addDragAndDropHandlers(li);
+
+        // Відправити нове завдання на сервер
+        sendTask({ id: li.id, text: inputBox.value, checked: false });
     }
     inputBox.value = "";
     saveData();
 }
+
+// Обробка повідомлень, отриманих від сервера
+// Обробка повідомлень, отриманих від сервера
+socket.onmessage = function(event) {
+    try {
+        console.log('Message received from server:', event.data); // Логування для налагодження
+        const task = JSON.parse(event.data);
+
+        // Перевірка, чи завдання вже існує на сторінці
+        const existingTask = document.getElementById(task.id);
+        if (existingTask) return; // Якщо завдання вже існує, не додавайте його
+
+        // Додати отримане завдання в список
+        let li = document.createElement("li");
+        li.textContent = task.text;
+        li.id = task.id;
+        li.draggable = true;
+
+        if (task.checked) {
+            li.classList.add("checked");
+        }
+
+        listContainer.appendChild(li);
+
+        let span = document.createElement("span");
+        span.innerHTML = `\u00d7`;
+        li.appendChild(span);
+
+        addDragAndDropHandlers(li);
+    } catch (e) {
+        console.error("Failed to parse message from server:", e);
+    }
+};
+
 
 inputBox.addEventListener("keydown", function (event) {
     if (event.key === "Enter") {
@@ -47,7 +93,7 @@ function saveData() {
         tasks.push({
             id: li.id,
             text: li.firstChild.textContent,
-            checked: li.classList.contains("checked") // Зберігаємо стан "checked"
+            checked: li.classList.contains("checked")
         });
     });
     localStorage.setItem("tasks", JSON.stringify(tasks));
@@ -64,7 +110,7 @@ function showTask() {
             li.draggable = true;
 
             if (task.checked) {
-                li.classList.add("checked"); // Відновлюємо стан "checked"
+                li.classList.add("checked");
             }
 
             listContainer.appendChild(li);
@@ -101,18 +147,14 @@ function addDragAndDropHandlers(item) {
         const draggableElement = document.getElementById(id);
         const dropzone = e.target;
 
-        // Отримуємо координати миші
         const mouseY = e.clientY;
-
-        // Отримуємо координати верхньої та нижньої частини поточного елемента
         const boundingRect = dropzone.getBoundingClientRect();
-        const offsetY = boundingRect.top + (boundingRect.height / 2); // Середина елемента
+        const offsetY = boundingRect.top + (boundingRect.height / 2);
 
-        // Якщо миша знаходиться вище середини елемента - вставляємо перед ним, якщо нижче - після
         if (mouseY < offsetY) {
-            listContainer.insertBefore(draggableElement, dropzone); // Перед елементом
+            listContainer.insertBefore(draggableElement, dropzone);
         } else {
-            listContainer.insertBefore(draggableElement, dropzone.nextSibling); // Після елемента
+            listContainer.insertBefore(draggableElement, dropzone.nextSibling);
         }
 
         saveData();
