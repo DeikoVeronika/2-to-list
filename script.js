@@ -36,6 +36,14 @@ function addTask() {
     saveData();
 }
 
+// Додавання завдання при натисканні Enter
+inputBox.addEventListener("keydown", function(event) {
+    if (event.key === "Enter") {
+        event.preventDefault();  // Запобігаємо стандартній дії Enter
+        addTask();
+    }
+});
+
 // Обробка повідомлень від сервера
 socket.onmessage = function(event) {
     try {
