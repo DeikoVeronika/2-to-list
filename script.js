@@ -1,7 +1,6 @@
 const inputBox = document.getElementById("input-box");
 const listContainer = document.getElementById("list-container");
 
-// Підключення до WebSocket-сервера
 const socket = new WebSocket('ws://localhost:8080');
 
 // Відправка нового завдання на сервер
@@ -9,7 +8,7 @@ function sendTask(task) {
     socket.send(JSON.stringify(task));
 }
 
-// Додати завдання
+// Додавання завдання
 function addTask() {
     if (inputBox.value.trim() === '') {
         alert("You must write something!");
@@ -17,7 +16,6 @@ function addTask() {
         let li = document.createElement("li");
         li.textContent = inputBox.value;
 
-        // Присвоюємо унікальний id для кожного елемента li
         li.id = `task-${Date.now()}`;
         li.draggable = true;
 
@@ -29,7 +27,6 @@ function addTask() {
 
         addDragAndDropHandlers(li);
 
-        // Відправити нове завдання на сервер
         sendTask({ action: 'add', id: li.id, text: inputBox.value, checked: false });
     }
     inputBox.value = "";
@@ -39,7 +36,7 @@ function addTask() {
 // Додавання завдання при натисканні Enter
 inputBox.addEventListener("keydown", function(event) {
     if (event.key === "Enter") {
-        event.preventDefault();  // Запобігаємо стандартній дії Enter
+        event.preventDefault();
         addTask();
     }
 });
@@ -50,7 +47,6 @@ socket.onmessage = function(event) {
         const task = JSON.parse(event.data);
 
         if (task.action === 'add') {
-            // Додавання нового завдання
             addTaskToList(task);
         } else if (task.action === 'update') {
             updateTaskStatus(task);
