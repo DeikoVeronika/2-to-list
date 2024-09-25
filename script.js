@@ -30,63 +30,94 @@ function addTask() {
         addDragAndDropHandlers(li);
 
         // Відправити нове завдання на сервер
-        sendTask({ id: li.id, text: inputBox.value, checked: false });
+        sendTask({ action: 'add', id: li.id, text: inputBox.value, checked: false });
     }
     inputBox.value = "";
     saveData();
 }
 
-// Обробка повідомлень, отриманих від сервера
-// Обробка повідомлень, отриманих від сервера
+// Обробка повідомлень від сервера
 socket.onmessage = function(event) {
     try {
-        console.log('Message received from server:', event.data); // Логування для налагодження
         const task = JSON.parse(event.data);
 
-        // Перевірка, чи завдання вже існує на сторінці
-        const existingTask = document.getElementById(task.id);
-        if (existingTask) return; // Якщо завдання вже існує, не додавайте його
-
-        // Додати отримане завдання в список
-        let li = document.createElement("li");
-        li.textContent = task.text;
-        li.id = task.id;
-        li.draggable = true;
-
-        if (task.checked) {
-            li.classList.add("checked");
+        if (task.action === 'add') {
+            // Додавання нового завдання
+            addTaskToList(task);
+        } else if (task.action === 'update') {
+            updateTaskStatus(task);
+        } else if (task.action === 'delete') {
+            deleteTaskFromList(task);
+        } else if (task.action === 'reorder') {
+            reorderTasks(task.order);
         }
-
-        listContainer.appendChild(li);
-
-        let span = document.createElement("span");
-        span.innerHTML = `\u00d7`;
-        li.appendChild(span);
-
-        addDragAndDropHandlers(li);
     } catch (e) {
         console.error("Failed to parse message from server:", e);
     }
 };
 
+// Додавання завдання до списку
+function addTaskToList(task) {
+    const existingTask = document.getElementById(task.id);
+    if (existingTask) return;
 
-inputBox.addEventListener("keydown", function (event) {
-    if (event.key === "Enter") {
-        event.preventDefault();
-        addTask();
+    let li = document.createElement("li");
+    li.textContent = task.text;
+    li.id = task.id;
+    li.draggable = true;
+
+    if (task.checked) {
+        li.classList.add("checked");
     }
-});
+
+    listContainer.appendChild(li);
+
+    let span = document.createElement("span");
+    span.innerHTML = `\u00d7`;
+    li.appendChild(span);
+
+    addDragAndDropHandlers(li);
+}
+
+// Оновлення стану завдання
+function updateTaskStatus(task) {
+    const li = document.getElementById(task.id);
+    if (li) {
+        li.classList.toggle("checked", task.checked);
+    }
+}
+
+// Видалення завдання
+function deleteTaskFromList(task) {
+    const li = document.getElementById(task.id);
+    if (li) {
+        li.remove();
+    }
+}
+
+// Перетягування
+function reorderTasks(order) {
+    order.forEach(id => {
+        const li = document.getElementById(id);
+        listContainer.appendChild(li);
+    });
+}
 
 listContainer.addEventListener("click", function (e) {
     if (e.target.tagName === "LI") {
         e.target.classList.toggle("checked");
+        const checked = e.target.classList.contains("checked");
+        sendTask({ action: 'update', id: e.target.id, checked });
         saveData();
     } else if (e.target.tagName === "SPAN") {
+        const taskId = e.target.parentElement.id;
+        sendTask({ action: 'delete', id: taskId });
         e.target.parentElement.remove();
         saveData();
     }
 }, false);
 
+// Збереження даних в localStorage
 function saveData() {
     let tasks = [];
     listContainer.querySelectorAll("li").forEach(li => {
@@ -102,24 +133,8 @@ function saveData() {
 function showTask() {
     let tasks = JSON.parse(localStorage.getItem("tasks"));
     if (tasks) {
-        listContainer.innerHTML = '';
         tasks.forEach(task => {
-            let li = document.createElement("li");
-            li.textContent = task.text;
-            li.id = task.id;
-            li.draggable = true;
-
-            if (task.checked) {
-                li.classList.add("checked");
-            }
-
-            listContainer.appendChild(li);
-
-            let span = document.createElement("span");
-            span.innerHTML = `\u00d7`;
-            li.appendChild(span);
-
-            addDragAndDropHandlers(li);
+            addTaskToList(task);
         });
     }
 }
@@ -156,6 +171,10 @@ function addDragAndDropHandlers(item) {
         } else {
             listContainer.insertBefore(draggableElement, dropzone.nextSibling);
         }
+
+        // Відправлення нового порядку на сервер
+        let order = [...listContainer.querySelectorAll("li")].map(li => li.id);
+        sendTask({ action: 'reorder', order });
 
         saveData();
     });

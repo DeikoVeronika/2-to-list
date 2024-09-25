@@ -6,16 +6,12 @@ const wss = new WebSocket.Server({ port: 8080 });
 wss.on('connection', (ws) => {
     console.log('New client connected');
 
-    // Обробка отриманих повідомлень від клієнтів
     ws.on('message', (message) => {
-        console.log(`Received message: ${message}`);
         try {
-            const task = JSON.parse(message); // Перетворення в об'єкт
-            // Відправка повідомлення всім клієнтам
+            const task = JSON.parse(message);
             wss.clients.forEach((client) => {
                 if (client.readyState === WebSocket.OPEN) {
-                    client.send(JSON.stringify(task)); // Відправка JSON-формату
-                    console.log(`Sent message to client: ${message}`); // Логування для налагодження
+                    client.send(JSON.stringify(task));
                 }
             });
         } catch (e) {
@@ -23,7 +19,6 @@ wss.on('connection', (ws) => {
         }
     });
 
-    // Виведення в консоль, коли клієнт відключається
     ws.on('close', () => {
         console.log('Client disconnected');
     });
