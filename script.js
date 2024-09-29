@@ -53,6 +53,7 @@ inputBox.addEventListener("keydown", function(event) {
 });
 
 // Обробка повідомлень від сервера
+// Обробка повідомлень від сервера
 socket.onmessage = function(event) {
     try {
         const task = JSON.parse(event.data);
@@ -66,7 +67,8 @@ socket.onmessage = function(event) {
             } else if (task.action === 'delete') {
                 deleteTaskFromList(task);
             } else if (task.action === 'reorder') {
-                reorderTasks(task.order, true);  // true для анімації
+                // Виклик reorderTasks для всіх клієнтів, крім ініціатора
+                reorderTasks(task.order, true, task.draggedId);  // true для анімації
             }
         } else {
             if (task.action === 'add') {
@@ -76,13 +78,15 @@ socket.onmessage = function(event) {
             } else if (task.action === 'delete') {
                 deleteTaskFromList(task);
             } else if (task.action === 'reorder') {
-                reorderTasks(task.order, false);  // false для ініціатора
+                // Не викликати анімацію для ініціатора
+                reorderTasks(task.order, false, task.draggedId);  // false для ініціатора
             }
         }
     } catch (e) {
         console.error("Failed to parse message from server:", e);
     }
 };
+
 
 // Додавання завдання до списку
 function addTaskToList(task, animate) {
@@ -134,15 +138,16 @@ function deleteTaskFromList(task) {
 }
 
 // Перетягування і зміна порядку
-function reorderTasks(order, animate) {
-    order.forEach((id, index) => {
+function reorderTasks(order, animate, draggedId) {
+    order.forEach((id) => {
         const li = document.getElementById(id);
         listContainer.appendChild(li);
-        if (animate && index === 0) {  // Підсвічуємо тільки перший переміщений елемент
-            animateHighlightTask(li);  // Анімація тільки для інших клієнтів
+        if (animate && id === draggedId) {  // Підсвічуємо перетягнутий елемент
+            animateHighlightTask(li);
         }
     });
 }
+
 
 
 // Додавання підсвітки
@@ -162,13 +167,6 @@ function animateReorderTask(taskElement) {
     }, 500);
 }
 
-// Підсвічування завдання
-function animateHighlightTask(taskElement) {
-    taskElement.classList.add("highlight");
-    setTimeout(() => {
-        taskElement.classList.remove("highlight");
-    }, 1000);
-}
 
 listContainer.addEventListener("click", function (e) {
     if (e.target.tagName === "LI") {
@@ -243,8 +241,12 @@ function addDragAndDropHandlers(item) {
 
         // Відправлення нового порядку на сервер
         let order = [...listContainer.querySelectorAll("li")].map(li => li.id);
-        sendTask({ action: 'reorder', order });
+        sendTask({ action: 'reorder', order, draggedId: id });
+
+        // Додайте цю лінію для підсвічування переміщеного елемента
+        animateHighlightTask(draggableElement);
 
         saveData();
     });
+
 }
