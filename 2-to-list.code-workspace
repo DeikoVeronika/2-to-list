@@ -1,0 +1,15 @@
+{
+	"folders": [
+		{
+			"name": "2-to-list",
+			"path": "."
+		},
+		{
+			"name": "websocket-server",
+			"path": "../../websocket-server"
+		}
+	],
+	"settings": {
+		"liveServer.settings.multiRootWorkspaceName": "2-to-list"
+	}
+}

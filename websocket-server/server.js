@@ -1,45 +1,43 @@
 const WebSocket = require('ws');
 
-// Створення WebSocket-сервера на порту 8080
 const wss = new WebSocket.Server({ port: 8080 });
 
+// Мапа для зберігання з'єднань
+const clients = new Map();
+
 wss.on('connection', (ws) => {
-    console.log('New client connected');
+    const clientId = Date.now();
+    clients.set(clientId, ws);
 
-    // Обробка отриманих повідомлень від клієнтів
+    console.log(`New client connected: ${clientId}`);
+
     ws.on('message', (message) => {
-        console.log(`Received message: ${message}`);
+        console.log(`Received message from ${clientId}: ${message}`);
+        
+        // Парсимо повідомлення
+        let task;
         try {
-            const task = JSON.parse(message); // Перетворення в об'єкт
-
-            console.log(`Parsed task: ${JSON.stringify(task)}`);
-
-            // Логування різних типів дій
-            if (task.action === 'add') {
-                console.log(`Adding new task: ${task.text}`);
-            } else if (task.action === 'update') {
-                console.log(`Updating task state: ${task.id}, checked: ${task.checked}`);
-            } else if (task.action === 'delete') {
-                console.log(`Deleting task: ${task.id}`);
-            } else if (task.action === 'reorder') {
-                console.log(`Reordering task: ${task.id}`);
-            }
-
-            // Відправка повідомлення всім клієнтам
-            wss.clients.forEach((client) => {
-                if (client.readyState === WebSocket.OPEN) {
-                    client.send(JSON.stringify(task)); // Відправка JSON-формату
-                }
-            });
-        } catch (e) {
-            console.error("Failed to parse message from client:", e);
+            task = JSON.parse(message);
+        } catch (error) {
+            console.error('Invalid JSON:', error);
+            return;
         }
+
+        // Відправляємо повідомлення всім клієнтам, окрім того, який відправив запит
+        clients.forEach((client, id) => {
+            if (id !== clientId && client.readyState === WebSocket.OPEN) {
+                client.send(message);
+            }
+        });
     });
 
-    // Виведення в консоль, коли клієнт відключається
     ws.on('close', () => {
-        console.log('Client disconnected');
+        console.log(`Client disconnected: ${clientId}`);
+        clients.delete(clientId);
+    });
+
+    ws.on('error', (error) => {
+        console.error(`Client error: ${clientId}`, error);
+        clients.delete(clientId);
     });
 });
-
-console.log('WebSocket server is running on ws://localhost:8080');

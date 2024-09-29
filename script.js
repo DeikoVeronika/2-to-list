@@ -2,9 +2,11 @@ const inputBox = document.getElementById("input-box");
 const listContainer = document.getElementById("list-container");
 
 const socket = new WebSocket('ws://localhost:8080');
+const clientId = Date.now();  // Унікальний ідентифікатор клієнта
 
 // Відправка нового завдання на сервер
 function sendTask(task) {
+    task.clientId = clientId;  // Додаємо ідентифікатор клієнта
     socket.send(JSON.stringify(task));
 }
 
@@ -28,9 +30,18 @@ function addTask() {
         addDragAndDropHandlers(li);
 
         sendTask({ action: 'add', id: li.id, text: inputBox.value, checked: false });
+        animateNewTask(li); // Анімація нового завдання для поточного клієнта
     }
     inputBox.value = "";
     saveData();
+}
+
+// Анімація нового завдання
+function animateNewTask(taskElement) {
+    taskElement.classList.add("highlight");
+    setTimeout(() => {
+        taskElement.classList.remove("highlight");
+    }, 1000);
 }
 
 // Додавання завдання при натисканні Enter
@@ -46,14 +57,27 @@ socket.onmessage = function(event) {
     try {
         const task = JSON.parse(event.data);
 
-        if (task.action === 'add') {
-            addTaskToList(task);
-        } else if (task.action === 'update') {
-            updateTaskStatus(task);
-        } else if (task.action === 'delete') {
-            deleteTaskFromList(task);
-        } else if (task.action === 'reorder') {
-            reorderTasks(task.order);
+        // Якщо повідомлення надійшло від іншого клієнта, тільки тоді показуємо анімацію
+        if (task.clientId !== clientId) {
+            if (task.action === 'add') {
+                addTaskToList(task, true);  // true для анімації
+            } else if (task.action === 'update') {
+                updateTaskStatus(task, true);  // true для анімації
+            } else if (task.action === 'delete') {
+                deleteTaskFromList(task);
+            } else if (task.action === 'reorder') {
+                reorderTasks(task.order, true);  // true для анімації
+            }
+        } else {
+            if (task.action === 'add') {
+                addTaskToList(task, false);  // false, бо не потрібна анімація для ініціатора
+            } else if (task.action === 'update') {
+                updateTaskStatus(task, false);  // false для ініціатора
+            } else if (task.action === 'delete') {
+                deleteTaskFromList(task);
+            } else if (task.action === 'reorder') {
+                reorderTasks(task.order, false);  // false для ініціатора
+            }
         }
     } catch (e) {
         console.error("Failed to parse message from server:", e);
@@ -61,7 +85,7 @@ socket.onmessage = function(event) {
 };
 
 // Додавання завдання до списку
-function addTaskToList(task) {
+function addTaskToList(task, animate) {
     const existingTask = document.getElementById(task.id);
     if (existingTask) return;
 
@@ -81,13 +105,20 @@ function addTaskToList(task) {
     li.appendChild(span);
 
     addDragAndDropHandlers(li);
+
+    if (animate) {
+        animateNewTask(li);  // Анімація, тільки якщо це інший клієнт
+    }
 }
 
 // Оновлення стану завдання
-function updateTaskStatus(task) {
+function updateTaskStatus(task, animate) {
     const li = document.getElementById(task.id);
     if (li) {
         li.classList.toggle("checked", task.checked);
+        if (animate) {
+            animateHighlightTask(li);  // Анімація тільки для інших клієнтів
+        }
     }
 }
 
@@ -95,16 +126,48 @@ function updateTaskStatus(task) {
 function deleteTaskFromList(task) {
     const li = document.getElementById(task.id);
     if (li) {
-        li.remove();
+        li.classList.add("fade-out");  // Анімація видалення
+        setTimeout(() => {
+            li.remove();
+        }, 500);
     }
 }
 
-// Перетягування
-function reorderTasks(order) {
-    order.forEach(id => {
+// Перетягування і зміна порядку
+function reorderTasks(order, animate) {
+    order.forEach((id, index) => {
         const li = document.getElementById(id);
         listContainer.appendChild(li);
+        if (animate && index === 0) {  // Підсвічуємо тільки перший переміщений елемент
+            animateHighlightTask(li);  // Анімація тільки для інших клієнтів
+        }
     });
+}
+
+
+// Додавання підсвітки
+function animateHighlightTask(taskElement) {
+    taskElement.classList.add("highlight");
+    setTimeout(() => {
+        taskElement.classList.remove("highlight");
+    }, 1000);
+}
+
+
+// Анімація переміщення завдання
+function animateReorderTask(taskElement) {
+    taskElement.classList.add("move");
+    setTimeout(() => {
+        taskElement.classList.remove("move");
+    }, 500);
+}
+
+// Підсвічування завдання
+function animateHighlightTask(taskElement) {
+    taskElement.classList.add("highlight");
+    setTimeout(() => {
+        taskElement.classList.remove("highlight");
+    }, 1000);
 }
 
 listContainer.addEventListener("click", function (e) {
@@ -134,15 +197,17 @@ function saveData() {
     localStorage.setItem("tasks", JSON.stringify(tasks));
 }
 
+// Показування завдань з localStorage
 function showTask() {
     let tasks = JSON.parse(localStorage.getItem("tasks"));
     if (tasks) {
         tasks.forEach(task => {
-            addTaskToList(task);
+            addTaskToList(task, false);  // false для відображення без анімації при завантаженні
         });
     }
 }
 showTask();
+
 
 function addDragAndDropHandlers(item) {
     item.addEventListener('dragstart', function (e) {

@@ -75,6 +75,26 @@ ul li {
     cursor: pointer;
     position: relative;
     line-height: 28px;
+
+    transition: transform 0.3s ease;
+}
+
+.highlight {
+    background-color: #ebcae6;
+    animation: highlight 0.5s forwards;
+}
+.move {
+    transition: transform 0.5s ease;
+}
+
+.fade-out {
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+@keyframes highlight {
+    0% { background-color: #ebcae6; }
+    100% { background-color: transparent; }
 }
 
 ul li::before {
