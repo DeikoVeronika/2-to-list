@@ -53,7 +53,6 @@ inputBox.addEventListener("keydown", function(event) {
 });
 
 // Обробка повідомлень від сервера
-// Обробка повідомлень від сервера
 socket.onmessage = function(event) {
     try {
         const task = JSON.parse(event.data);
