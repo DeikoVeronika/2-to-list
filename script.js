@@ -1,6 +1,5 @@
 const inputBox = document.getElementById("input-box");
 const listContainer = document.getElementById("list-container");
-
 const socket = new WebSocket('ws://localhost:8080');
 const clientId = Date.now();  // Унікальний ідентифікатор клієнта
 
@@ -10,29 +9,137 @@ function sendTask(task) {
     socket.send(JSON.stringify(task));
 }
 
-// Додавання завдання
 function addTask() {
-    if (inputBox.value.trim() === '') {
+    const taskText = inputBox.value.trim();
+    if (!taskText) {
         alert("You must write something!");
-    } else {
-        let li = document.createElement("li");
-        li.textContent = inputBox.value;
-
-        li.id = `task-${Date.now()}`;
-        li.draggable = true;
-
-        listContainer.appendChild(li);
-
-        let span = document.createElement("span");
-        span.innerHTML = `\u00d7`;
-        li.appendChild(span);
-
-        addDragAndDropHandlers(li);
-
-        sendTask({ action: 'add', id: li.id, text: inputBox.value, checked: false });
-        animateNewTask(li); // Анімація нового завдання для поточного клієнта
+        return;
     }
+
+    const taskId = `task-${Date.now()}`;
+    const li = createTaskElement(taskId, taskText);
+
+    listContainer.appendChild(li);
+    addDragAndDropHandlers(li);
+    sendTask({ action: 'add', id: taskId, text: taskText, checked: false });
+    animateNewTask(li);
+
     inputBox.value = "";
+    saveData();
+}
+
+function createTaskElement(id, text) {
+    const li = document.createElement("li");
+    li.id = id;
+    li.textContent = text;
+    li.draggable = true;
+
+    const closeButton = document.createElement("span");
+    closeButton.innerHTML = `\u00d7`;
+    li.appendChild(closeButton);
+
+    return li;
+}
+
+// Додавання завдання до списку
+function addTaskToList(task, animate) {
+    if (document.getElementById(task.id)) return;
+
+    const li = createTaskElement(task.id, task.text);
+
+    if (task.checked) {
+        li.classList.add("checked");
+    }
+
+    listContainer.appendChild(li);
+    addDragAndDropHandlers(li);
+
+    if (animate) {
+        animateNewTask(li);
+    }
+}
+
+// Показування завдань з localStorage
+function showTask() {
+    let tasks = JSON.parse(localStorage.getItem("tasks"));
+    if (tasks) {
+        tasks.forEach(task => {
+            addTaskToList(task, false);  // false для відображення без анімації при завантаженні
+        });
+    }
+}
+
+function updateTaskStatus(task, animate) {
+    const li = document.getElementById(task.id);
+    if (li) {
+        li.classList.toggle("checked", task.checked);
+        if (animate) {
+            animateHighlightTask(li);  // Анімація тільки для інших клієнтів
+        }
+    }
+}
+
+function deleteTaskFromList(task) {
+    const li = document.getElementById(task.id);
+    if (li) {
+        li.classList.add("fade-out");  // Анімація видалення
+        setTimeout(() => {
+            li.remove();
+        }, 500);
+    }
+}
+
+// Збереження даних в localStorage
+function saveData() {
+    let tasks = [];
+    listContainer.querySelectorAll("li").forEach(li => {
+        tasks.push({
+            id: li.id,
+            text: li.firstChild.textContent,
+            checked: li.classList.contains("checked")
+        });
+    });
+    localStorage.setItem("tasks", JSON.stringify(tasks));
+}
+
+function addDragAndDropHandlers(item) {
+    item.addEventListener('dragstart', handleDragStart);
+    item.addEventListener('dragend', handleDragEnd);
+    item.addEventListener('dragover', handleDragOver);
+    item.addEventListener('drop', handleDrop);
+}
+
+function handleDragStart(e) {
+    e.dataTransfer.setData('text/plain', e.target.id);
+    setTimeout(() => e.target.classList.add('hide'), 0);
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('hide');
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+}
+
+function handleDrop(e) {
+    e.preventDefault();
+    const id = e.dataTransfer.getData('text');
+    const draggableElement = document.getElementById(id);
+    const dropzone = e.target;
+
+    const mouseY = e.clientY;
+    const offsetY = dropzone.getBoundingClientRect().top + (dropzone.getBoundingClientRect().height / 2);
+
+    listContainer.insertBefore(
+        draggableElement,
+        mouseY < offsetY ? dropzone : dropzone.nextSibling
+    );
+
+    const order = Array.from(listContainer.querySelectorAll("li")).map(li => li.id);
+    sendTask({ action: 'reorder', order, draggedId: id });
+
+    animateHighlightTask(draggableElement);
     saveData();
 }
 
@@ -44,96 +151,20 @@ function animateNewTask(taskElement) {
     }, 1000);
 }
 
-// Додавання завдання при натисканні Enter
-inputBox.addEventListener("keydown", function(event) {
-    if (event.key === "Enter") {
-        event.preventDefault();
-        addTask();
-    }
-});
-
-// Обробка повідомлень від сервера
-socket.onmessage = function(event) {
-    try {
-        const task = JSON.parse(event.data);
-
-        // Якщо повідомлення надійшло від іншого клієнта, тільки тоді показуємо анімацію
-        if (task.clientId !== clientId) {
-            if (task.action === 'add') {
-                addTaskToList(task, true);  // true для анімації
-            } else if (task.action === 'update') {
-                updateTaskStatus(task, true);  // true для анімації
-            } else if (task.action === 'delete') {
-                deleteTaskFromList(task);
-            } else if (task.action === 'reorder') {
-                // Виклик reorderTasks для всіх клієнтів, крім ініціатора
-                reorderTasks(task.order, true, task.draggedId);  // true для анімації
-            }
-        } else {
-            if (task.action === 'add') {
-                addTaskToList(task, false);  // false, бо не потрібна анімація для ініціатора
-            } else if (task.action === 'update') {
-                updateTaskStatus(task, false);  // false для ініціатора
-            } else if (task.action === 'delete') {
-                deleteTaskFromList(task);
-            } else if (task.action === 'reorder') {
-                // Не викликати анімацію для ініціатора
-                reorderTasks(task.order, false, task.draggedId);  // false для ініціатора
-            }
-        }
-    } catch (e) {
-        console.error("Failed to parse message from server:", e);
-    }
-};
-
-
-// Додавання завдання до списку
-function addTaskToList(task, animate) {
-    const existingTask = document.getElementById(task.id);
-    if (existingTask) return;
-
-    let li = document.createElement("li");
-    li.textContent = task.text;
-    li.id = task.id;
-    li.draggable = true;
-
-    if (task.checked) {
-        li.classList.add("checked");
-    }
-
-    listContainer.appendChild(li);
-
-    let span = document.createElement("span");
-    span.innerHTML = `\u00d7`;
-    li.appendChild(span);
-
-    addDragAndDropHandlers(li);
-
-    if (animate) {
-        animateNewTask(li);  // Анімація, тільки якщо це інший клієнт
-    }
+// Додавання підсвітки
+function animateHighlightTask(taskElement) {
+    taskElement.classList.add("highlight");
+    setTimeout(() => {
+        taskElement.classList.remove("highlight");
+    }, 1000);
 }
 
-// Оновлення стану завдання
-function updateTaskStatus(task, animate) {
-    const li = document.getElementById(task.id);
-    if (li) {
-        li.classList.toggle("checked", task.checked);
-        if (animate) {
-            animateHighlightTask(li);  // Анімація тільки для інших клієнтів
-        }
-    }
-}
-
-// Видалення завдання
-function deleteTaskFromList(task) {
-    const li = document.getElementById(task.id);
-    if (li) {
-        li.classList.add("fade-out");  // Анімація видалення
-        setTimeout(() => {
-            li.remove();
-        }, 500);
-    }
+// Анімація переміщення завдання
+function animateReorderTask(taskElement) {
+    taskElement.classList.add("move");
+    setTimeout(() => {
+        taskElement.classList.remove("move");
+    }, 500);
 }
 
 // Перетягування і зміна порядку
@@ -147,25 +178,13 @@ function reorderTasks(order, animate, draggedId) {
     });
 }
 
-
-
-// Додавання підсвітки
-function animateHighlightTask(taskElement) {
-    taskElement.classList.add("highlight");
-    setTimeout(() => {
-        taskElement.classList.remove("highlight");
-    }, 1000);
-}
-
-
-// Анімація переміщення завдання
-function animateReorderTask(taskElement) {
-    taskElement.classList.add("move");
-    setTimeout(() => {
-        taskElement.classList.remove("move");
-    }, 500);
-}
-
+// Додавання завдання при натисканні Enter
+inputBox.addEventListener("keydown", function(event) {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        addTask();
+    }
+});
 
 listContainer.addEventListener("click", function (e) {
     if (e.target.tagName === "LI") {
@@ -181,71 +200,32 @@ listContainer.addEventListener("click", function (e) {
     }
 }, false);
 
-// Збереження даних в localStorage
-function saveData() {
-    let tasks = [];
-    listContainer.querySelectorAll("li").forEach(li => {
-        tasks.push({
-            id: li.id,
-            text: li.firstChild.textContent,
-            checked: li.classList.contains("checked")
-        });
-    });
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-}
+// Обробка повідомлень від сервера
+socket.onmessage = function(event) {
+    try {
+        const task = JSON.parse(event.data);
+        const isInitiator = task.clientId === clientId;
+        const animate = !isInitiator;
 
-// Показування завдань з localStorage
-function showTask() {
-    let tasks = JSON.parse(localStorage.getItem("tasks"));
-    if (tasks) {
-        tasks.forEach(task => {
-            addTaskToList(task, false);  // false для відображення без анімації при завантаженні
-        });
-    }
-}
-showTask();
-
-
-function addDragAndDropHandlers(item) {
-    item.addEventListener('dragstart', function (e) {
-        e.dataTransfer.setData('text/plain', e.target.id);
-        setTimeout(() => {
-            e.target.classList.add('hide');
-        }, 0);
-    });
-
-    item.addEventListener('dragend', function (e) {
-        e.target.classList.remove('hide');
-    });
-
-    item.addEventListener('dragover', function (e) {
-        e.preventDefault();
-    });
-
-    item.addEventListener('drop', function (e) {
-        e.preventDefault();
-        const id = e.dataTransfer.getData('text');
-        const draggableElement = document.getElementById(id);
-        const dropzone = e.target;
-
-        const mouseY = e.clientY;
-        const boundingRect = dropzone.getBoundingClientRect();
-        const offsetY = boundingRect.top + (boundingRect.height / 2);
-
-        if (mouseY < offsetY) {
-            listContainer.insertBefore(draggableElement, dropzone);
-        } else {
-            listContainer.insertBefore(draggableElement, dropzone.nextSibling);
+        switch (task.action) {
+            case 'add':
+                addTaskToList(task, animate);
+                break;
+            case 'update':
+                updateTaskStatus(task, animate);
+                break;
+            case 'delete':
+                deleteTaskFromList(task);
+                break;
+            case 'reorder':
+                reorderTasks(task.order, animate, task.draggedId);
+                break;
+            default:
+                console.warn("Unknown task action:", task.action);
         }
+    } catch (e) {
+        console.error("Failed to parse message from server:", e);
+    }
+};
 
-        // Відправлення нового порядку на сервер
-        let order = [...listContainer.querySelectorAll("li")].map(li => li.id);
-        sendTask({ action: 'reorder', order, draggedId: id });
-
-        // Додайте цю лінію для підсвічування переміщеного елемента
-        animateHighlightTask(draggableElement);
-
-        saveData();
-    });
-
-}
+showTask();
